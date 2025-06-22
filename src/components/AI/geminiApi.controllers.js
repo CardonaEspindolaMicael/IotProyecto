@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import axios, { formToJSON } from "axios";
 import fs from "fs";
+import path from "path";
 
 export const getModelGemini = async (req, res) => {
   try {
@@ -387,12 +388,44 @@ ${rawData}`;
       });
     }
 
-    console.log("Executive Summary Generated:", message);
+    // Convertir texto a audio
+    const audioBuffer = await textToAudio(message);
+    
+    if (typeof audioBuffer === 'string') {
+      // Si textToAudio retorna un string, es un error
+      return res.status(500).json({
+        error: "Failed to convert text to audio",
+        details: audioBuffer
+      });
+    }
 
-    return res.json({ 
-      summary: message,
-      timestamp: new Date().toISOString(),
-      status: "success"
+    // Crear directorio de uploads si no existe
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Generar nombre único para el archivo de audio
+    const timestamp = Date.now();
+    const fileName = `audio_${timestamp}.mp3`;
+    const filePath = path.join(uploadsDir, fileName);
+
+    // Guardar el archivo de audio
+    fs.writeFileSync(filePath, audioBuffer);
+
+    // Enviar el archivo de audio como respuesta
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error('Error sending file:', err);
+      }
+      // Eliminar el archivo después de enviarlo
+      fs.unlink(filePath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error('Error deleting file:', unlinkErr);
+        }
+      });
     });
 
   } catch (error) {
@@ -402,5 +435,70 @@ ${rawData}`;
       details: error.message,
       timestamp: new Date().toISOString()
     });
+  }
+};
+
+export const textToAudio = async (text) => {
+  try {
+    // Validar que se proporcione texto
+    if (!text) {
+      return "Text is required";
+    }
+
+    // Configurar la petición a ElevenLabs
+    const options = {
+      method: 'POST',
+      url: 'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', // Voz por defecto
+      headers: {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': 'sk_0d021d95fe38d787ecfbbcab5f734df1cb2bc39b8231f721'
+      },
+      data: {
+        text: text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5
+        }
+      },
+      responseType: 'arraybuffer'
+    };
+
+    // Realizar la petición a ElevenLabs
+    const response = await axios(options);
+
+    // Retornar el buffer de audio
+    return response.data;
+
+  } catch (error) {
+    console.error("Error converting text to audio:", error);
+    
+    if (error.response) {
+      // Error de la API de ElevenLabs
+      const statusCode = error.response.status;
+      let errorMessage = "Failed to convert text to audio";
+      
+      switch (statusCode) {
+        case 401:
+          errorMessage = "Invalid API key";
+          break;
+        case 400:
+          errorMessage = "Invalid request parameters";
+          break;
+        case 422:
+          errorMessage = "Invalid text or voice settings";
+          break;
+        case 429:
+          errorMessage = "Rate limit exceeded";
+          break;
+        default:
+          errorMessage = `ElevenLabs API error: ${statusCode}`;
+      }
+      
+      return errorMessage;
+    }
+    
+    return "Internal server error";
   }
 };

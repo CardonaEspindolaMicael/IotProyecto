@@ -1,5 +1,5 @@
 import {Router} from "express"
-import { generateEnergyDashboard, getModelGemini, postImgToHtml, rawDataToText } from "./geminiApi.controllers.js";
+import { generateEnergyDashboard, getModelGemini, postImgToHtml, rawDataToText} from "./geminiApi.controllers.js";
 import multer from "multer";
 const upload = multer({ dest: "uploads/" });
 const geminiApiRouter = Router() ;
