@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import axios from "axios";
+import axios, { formToJSON } from "axios";
 import fs from "fs";
 
 export const getModelGemini = async (req, res) => {
@@ -94,3 +94,313 @@ export const postImgToHtml = async (req, res) => {
       res.status(500).json({ error: "Failed to process image", details: error.message });
     }
   }
+
+
+
+  /**************************************************************************************** */
+
+  // Función 1: Limpieza de datos con IA
+export const cleanDataWithAI = async (apiKey,rawData) => {
+  try {
+
+   if (!rawData || typeof rawData !== 'string') {
+      return "Please provide rawData as a string.";
+    }
+
+    if (!apiKey) {
+      return "API key is required.";
+    }
+
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    const cleaningPrompt = `You are a data processing expert. Clean and optimize the following energy and maintenance data for dashboard visualization.
+
+**YOUR TASK:**
+Transform the raw data into a clean, structured format optimized for dashboard creation.
+
+**CLEANING RULES:**
+1. **Energy Data Processing:**
+   - Parse timestamps to ISO format
+   - Convert consumption values to numbers
+   - Calculate KPIs: current, average, max, min consumption
+   - Group consumption by hour of day
+   - Identify trends and patterns
+
+2. **Maintenance Data Processing:**
+   - Extract sensor readings and convert to proper numbers
+   - Calculate health percentages and failure probabilities
+   - Identify active alerts and recommendations
+   - Process equipment diagnostics
+
+3. **Data Quality Assessment:**
+   - Count total valid records
+   - Identify missing or invalid data
+   - Rate data quality (good/limited/poor)
+
+4. **Alert Generation:**
+   - Create alerts for low health (<50%)
+   - Create alerts for high failure probability (>70%)
+   - Process existing diagnostic alerts
+   - Assign severity levels (critical/warning/info)
+
+**OUTPUT FORMAT:**
+Return ONLY a clean JSON object with this structure:
+{
+  "metadata": {
+    "processedAt": "ISO timestamp",
+    "dataQuality": "good|limited|poor",
+    "totalRecords": number,
+    "hasEnergyData": boolean,
+    "hasMaintenanceData": boolean
+  },
+  "kpis": {
+    "currentConsumption": number,
+    "averageConsumption": number,
+    "predictedConsumption": number,
+    "healthPercentage": number,
+    "failureProbability": number,
+    "remainingLifeDays": number
+  },
+  "charts": {
+    "energyTimeSeries": [{"timestamp": "ISO", "consumption": number, "temperature": number}],
+    "hourlyConsumption": [{"hour": number, "avgConsumption": number}],
+    "temperatureCorrelation": [{"temperature": number, "consumption": number}]
+  },
+  "maintenance": {
+    "assetId": "string",
+    "sensors": {
+      "vibration": number,
+      "motorTemp": number,
+      "pressure": number,
+      "electricCurrent": number,
+      "operatingHours": number
+    },
+    "lastUpdate": "ISO timestamp"
+  },
+  "alerts": [
+    {
+      "type": "maintenance|health|failure|energy",
+      "severity": "critical|warning|info",
+      "code": "string",
+      "message": "string",
+      "recommendation": "string",
+      "timestamp": "ISO timestamp"
+    }
+  ]
+}
+
+**IMPORTANT:**
+- Return ONLY valid JSON (no markdown, no explanations)
+- Handle missing data gracefully (use 0 or null)
+- All numbers must be valid (no NaN or undefined)
+- All timestamps must be valid ISO strings
+- Calculate derived metrics where possible
+- Remove duplicate or invalid entries
+
+**RAW DATA TO CLEAN:**
+${JSON.stringify(rawData, null, 2)}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{ text: cleaningPrompt }],
+    });
+
+    let generatedText = response.text;
+    generatedText = generatedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    let cleanedData;
+    try {
+      cleanedData = JSON.parse(generatedText);
+    } catch (parseError) {
+      const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanedData = JSON.parse(jsonMatch[0]);
+      } else {
+      console.error("Error cleaning data:", error);
+      }
+    }
+
+   console.log(cleanedData)
+
+    return JSON.stringify(cleanedData);
+
+
+
+  } catch (error) {
+    console.error("Error cleaning data:", error);
+  }
+};
+
+export const generateEnergyDashboard = async (req, res) => {
+  try {
+    const { apiKey } = req.params;
+    const { rawData } = req.body;
+
+    if (!apiKey) {
+      return res.status(400).json({ error: "API key is required." });
+    }
+
+    const cleanedData = await cleanDataWithAI(apiKey, rawData);
+
+    const ai = new GoogleGenAI({ apiKey });
+
+const dashboardPrompt = `You are a React + Tailwind developer. Create a PROFESSIONAL energy dashboard for executives.
+
+**REQUIREMENTS:**
+- **Theme**: Light theme - bg-white, bg-gray-50 for cards, text-gray-800
+- **Colors**: Use blue-600, green-600, amber-500, red-600 for charts and status
+- **Charts**: Use Apache ECharts (already installed) - create Line, Bar, and Doughnut charts
+- **Layout**: Professional grid layout, clean and minimal
+
+**STRUCTURE:**
+1. Clean header with "Energy Dashboard" title
+2. 4 KPI metric cards (consumption, efficiency, cost, alerts)
+3. 3 charts section: Line chart (trends), Bar chart (comparison), Doughnut chart (distribution)
+4. Compact status/alerts panel
+
+**CHART IMPLEMENTATION:**
+- Use ReactECharts component: <ReactECharts option={chartOption} style={{height: '300px'}} />
+- Create proper ECharts options with the provided data
+- Style charts with light theme colors
+- Make charts responsive
+
+**CODE RULES:**
+- Clean, professional JSX
+- Use Tailwind utilities only
+- Keep code concise but functional
+- Responsive grid system
+- Professional typography
+
+**DATA TO VISUALIZE:**
+${JSON.stringify(cleanedData, null, 2)}
+
+**OUTPUT:**
+Return ONLY the JSX content that goes INSIDE the return statement.
+- Start directly with the opening <div> tag
+- End with the closing </div> tag
+- NO "return (" at the beginning
+- NO ");" at the end
+- Just the pure JSX content inside the return
+- Include chart configurations and options
+
+Example format:
+<div className="min-h-screen bg-white">
+  {/* Dashboard content here */}
+</div>`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{ text: dashboardPrompt }],
+    });
+
+    const generatedText =
+      response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    const cleanedJSX = generatedText
+      .replace(/```(jsx|tsx)?/g, "")
+      .trim();
+
+
+console.log(cleanedJSX)
+    return res.json({
+      jsx: cleanedJSX
+    });
+
+  } catch (error) {
+    console.error("Error generating dashboard JSX:", error);
+    res.status(500).json({
+      error: "Failed to generate dashboard JSX",
+      details: error.message
+    });
+  }
+};
+
+
+
+/* Generar texto para voz desde datos */
+
+export const rawDataToText = async (req, res) => {
+  try {
+    const { apiKey } = req.params;
+    const { rawData } = req.body;
+
+    if (!apiKey) {
+      return res.status(400).json({ error: "API key is required." });
+    }
+
+    if (!rawData || typeof rawData !== 'string') {
+      return res.status(400).json({ error: "Please provide rawData as a string." });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    const analystPrompt = `You are a professional Spanish you talk in spanish energy data analyst presenting to high-level executives.
+
+**OBJECTIVE:** Generate a clear and professional executive summary (2–4 short paragraphs) as if presenting verbally during a board meeting.
+
+**PRESENTATION STYLE:**
+- Professional yet natural tone, like an expert consultant
+- Addressed to non-technical executives
+- Focus on business impact, operational efficiency, cost trends, and risks
+- Include observations on patterns, anomalies, alerts, and strategic recommendations
+- Use executive-friendly language such as "financial impact", "optimization", "operational efficiency"
+
+**REGLAS TÉCNICAS IMPORTANTES:**
+- **SIEMPRE expandir abreviaciones en espaniol**: 
+  • KWH → Kilovatio Hora
+  • MW → Megavatio
+  • KW → Kilovatio  
+  • HVAC → Sistema de Calefacción, Ventilación y Aire Acondicionado
+  • RPM → Revoluciones Por Minuto
+  • PSI → Libras por Pulgada Cuadrada
+  • BTU → Unidad Térmica Británica
+- Explain technical terms in business-relevant terms
+- NUNCA AGREGAR ABREVIACIONES
+- Mention financial implications when relevant
+
+**STRUCTURE:**
+1. General summary of the energy performance
+2. Key findings and significant metrics  
+3. Risks, opportunities, or actionable recommendations
+4. Professional closing appropriate for executive communication
+
+**OUTPUT FORMAT:**
+- Only plain narrative text in English
+- NO JSON, NO code, NO explanation of the process
+- Spanish output this is mandatory
+- Close with something like: "Gracias por su atencion" or "Muchas gracias por su tiempo"
+**
+${rawData}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{ text: analystPrompt }],
+    });
+
+    const message = response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+
+    if (!message) {
+      return res.status(500).json({
+        error: "AI failed to generate executive summary.",
+        rawResponse: response,
+      });
+    }
+
+    console.log("Executive Summary Generated:", message);
+
+    return res.json({ 
+      summary: message,
+      timestamp: new Date().toISOString(),
+      status: "success"
+    });
+
+  } catch (error) {
+    console.error("Error generating executive summary:", error);
+    res.status(500).json({
+      error: "Failed to generate executive summary",
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+};
