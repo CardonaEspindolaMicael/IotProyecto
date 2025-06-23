@@ -22,10 +22,11 @@ export const getSuscripcionByIdModel = async (id) => {
 
 export const crearSuscripcionModel = async (datos) => {
   try {
-    const {nombre_plan, limite_edificios, limite_usuarios, descripcion} = datos;
+    const {nombre_plan, precio, limite_edificios, limite_usuarios, descripcion} = datos;
     return await prisma.suscripcion.create({
       data: {
         nombre_plan,
+        precio,
         limite_edificios,
         limite_usuarios,
         descripcion

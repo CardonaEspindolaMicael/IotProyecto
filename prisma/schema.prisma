@@ -12,6 +12,7 @@ generator client {
 model Suscripcion {
   id               Int        @id @default(autoincrement())
   nombre_plan      String
+  precio           Float      @default(0)
   limite_edificios Int?
   limite_usuarios  Int?
   descripcion      String?
@@ -23,10 +24,10 @@ model Cliente {
   id              Int        @id @default(autoincrement())
   nombre_empresa  String
   fecha_registro  DateTime   @default(now())
-  suscripcion_id  Int
+  suscripcion_id  Int?
   activo          Boolean    @default(true)
 
-  suscripcion     Suscripcion @relation(fields: [suscripcion_id], references: [id])
+  suscripcion     Suscripcion? @relation(fields: [suscripcion_id], references: [id])
   edificios       Edificio[]
   roles           Rol[]
   usuarios        Usuario[]
